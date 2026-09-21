@@ -19,73 +19,26 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site"
 ESC = html.escape
 
+def load_course():
+    data=json.loads((ROOT/'content/course.json').read_text(encoding='utf-8'))
+    lines=data['code'].splitlines()
+    for page in data['guide']:
+        for block in page['blocks']:
+            if 'code_lines' in block:
+                start,end=block['code_lines']
+                block['text']='\n'.join(lines[start:end])
+    return data
+
 def validate(data, release=False):
-    required = ["title", "subtitle", "version", "status", "organization", "specialty", "group", "module", "hours", "environment", "variant_count", "practices", "pages", "variants"]
-    for key in required:
-        if key not in data or data[key] in ("", None, []):
-            raise ValueError(f"Отсутствует обязательное поле: {key}")
-    if data["status"] not in ("template", "ready"):
-        raise ValueError("status должен быть template или ready")
-    ids = [p["id"] for p in data["practices"]]
-    if len(set(ids)) != len(ids) or not all(re.fullmatch(r"[a-z][a-z0-9-]*", p) for p in ids):
-        raise ValueError("Идентификаторы практик должны быть уникальными латинскими slug")
-    for practice in data["practices"]:
-        for key in ("title", "dates", "type", "input", "new", "output"):
-            if not practice.get(key):
-                raise ValueError(f"Практика {practice['id']}: нет {key}")
-    if len(data["variants"]) != data["variant_count"]:
-        raise ValueError("Число карточек не совпадает с variant_count")
-    if [v["number"] for v in data["variants"]] != list(range(1, data["variant_count"] + 1)):
-        raise ValueError("Номера вариантов должны идти подряд от 1")
-    for v in data["variants"]:
-        for key in ("title", "context", "objects", "rule", "success", "checks", "progression"):
-            if not v.get(key):
-                raise ValueError(f"Вариант {v['number']}: нет {key}")
-        if set(v["progression"]) != set(ids) or not all(v["progression"].values()):
-            raise ValueError(f"Вариант {v['number']}: нарушена связь с практиками")
-    for page in data["pages"]:
-        if not page.get("title") or not page.get("kicker") or not page.get("blocks"):
-            raise ValueError("Учебная страница должна иметь title, kicker, blocks")
-        for b in page["blocks"]:
-            if not b.get("title") or not b.get("text") or b.get("kind", "text") not in ("text", "code", "note"):
-                raise ValueError("Блок должен иметь title, text и допустимый kind")
-    if release:
-        text = json.dumps(data, ensure_ascii=False)
-        if data["status"] != "ready" or "ЗАПОЛНИТЬ" in text:
-            raise ValueError("Выдача запрещена: заполните поля ЗАПОЛНИТЬ и установите status=ready")
-        rules = [v["rule"].strip().casefold() for v in data["variants"]]
-        if len(set(rules)) != len(rules):
-            raise ValueError("Индивидуальные правила вариантов повторяются")
-
-def b(title, text, kind="text"):
-    return {"title": title, "text": text, "kind": kind}
-
-def pages_for(data):
-    pages = list(data["pages"])
-    passport = {"title": "Реквизиты и рабочая среда", "kicker": "Паспорт / Данные комплекта", "blocks": [
-        b("Организация и специальность", data["organization"] + "\n" + data["specialty"]),
-        b("Группа, модуль и объём", data["group"] + "\n" + data["module"] + "\n" + data["hours"]),
-        b("Рабочая среда", data["environment"]),
-        b("Версия комплекта", data["version"] + ". Учебные страницы и предметные области выдаются вместе."),
-    ]}
-    pages.insert(2, passport)
-    route = {"title": "Карта последовательных практик", "kicker": "Маршрут / Вход → новая работа → результат", "blocks": []}
-    for i, p in enumerate(data["practices"], 1):
-        route["blocks"].append(b(f"{i:02}. {p['title']}", f"{p['type']} · {p['dates']}\nВход: {p['input']}\nНовая работа: {p['new']}\nВыход: {p['output']}"))
-    if data.get('connections'):
-        pages.insert(3, route)
-    areas = [{"title": "Предметные области и варианты", "kicker": "Отдельный блок / Индивидуальные условия", "blocks": [
-        b("Как использовать", "Номер варианта назначает преподаватель. Общие требования находятся в задании; карточка уточняет индивидуальные правила текущей практики. Связь с другими практиками указывается только при необходимости."),
-        b("Что содержит карточка", "Контекст задачи, объекты и исходные данные, особое правило, условия успеха и отказа, новые результаты каждой практики, контрольные сценарии."),
-        b("Статус карточек" if data['status'] == 'template' else "Индивидуальные условия", f"В этом шаблоне подготовлено {data['variant_count']} карточек для заполнения. Это места для будущих заданий, а не {data['variant_count']} готовых вариантов. Сначала задайте сопоставимую сложность, затем заполните каждую карточку." if data['status'] == 'template' else "Выполняйте условия назначенного варианта вместе с общими требованиями практики. Сохраняйте номер варианта в отчёте и в именах сдаваемых файлов.", "note"),
-        b("Доступность материалов", "Все обязательные исходные данные должны находиться в комплекте учебной системы. Для выполнения задания студенту не требуется доступ к GitHub или к сайту преподавателя."),
-    ]}]
-    for v in data["variants"]:
-        blocks = [b("Контекст и задача", v["context"]), b("Объекты и исходные данные", v["objects"]), b("Индивидуальное правило", v["rule"]), b("Успех и отказ", v["success"])]
-        blocks += [b(f"Практика {i}: {p['title']}", v["progression"][p["id"]]) for i, p in enumerate(data["practices"], 1)]
-        blocks += [b("Контрольные сценарии", v["checks"])]
-        areas.append({"title": f"Вариант {v['number']:02}. {v['title']}", "kicker": "Предметная область / Индивидуальное задание", "blocks": blocks, "anchor": f"variant-{v['number']:02}"})
-    return pages, areas
+    for key in ('meta','assignment','guide','areas','code'):
+        if not data.get(key): raise ValueError(f'Нет обязательного раздела: {key}')
+    for key in ('assignment','guide','areas'):
+        for page in data[key]:
+            if not page.get('title') or not page.get('blocks'): raise ValueError('Неполная страница')
+            for block in page['blocks']:
+                if not block.get('title') or not block.get('text'): raise ValueError('Неполный блок')
+    if release and (data['meta']['status']!='ready' or 'ЗАПОЛНИТЬ' in json.dumps(data,ensure_ascii=False)):
+        raise ValueError('Перед выдачей заполните реквизиты и установите meta.status=ready')
 
 def fonts():
     candidates = [
@@ -243,64 +196,50 @@ def page_html(page, i):
     return f'<article class="lesson" id="{anchor}"><p class="eyebrow">{ESC(page["kicker"])}</p><h2>{ESC(page["title"])}</h2><div class="blocks">' + "".join(block_html(b) for b in page["blocks"]) + '</div></article>'
 
 def shell(data, active, title, lead, body):
-    links = [("index.html", "Обзор"), ("example.html", "Задание"), ("lessons.html", "Инструкция"), ("areas.html", "Предметные области"), ("example-result.html", "Образец"), ("author.html", "Преподавателю")]
+    links = [("index.html", "Задание"), ("lessons.html", "Инструкция и образец"), ("areas.html", "Предметные области"), ("author.html", "Преподавателю")]
     nav = "".join(f'<a {"aria-current=page" if url == active else ""} href="{url}">{label}</a>' for url, label in links)
     mark = '<span class="badge">Шаблон для заполнения</span>' if data["status"] == "template" else '<span class="badge">Заполненный пример</span>' if data['status']=='example' else '<span class="badge">Учебный комплект</span>'
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Универсальный шаблон практик: страницы для вебинара и автономные учебные PDF."><title>{ESC(title)} · {ESC(data['title'])}</title><link rel="icon" href="assets/favicon.svg"><link rel="stylesheet" href="assets/style.css"></head><body><a class="skip" href="#main">Перейти к содержанию</a><header class="shell top"><a class="brand" href="index.html"><span class="emblem">ПР</span><span><strong>Практика / Методические материалы</strong><small>{ESC(data['subtitle'])}</small></span></a><span class="version">Версия {ESC(data['version'])}</span></header><div class="shell"><nav aria-label="Основная навигация">{nav}</nav><main id="main"><section class="hero"><p class="eyebrow">Учебный маршрут / 2026</p><h1>{ESC(title)}</h1><p>{ESC(lead)}</p>{mark}</section>{body}</main><footer><span>Материалы для обзора преподавателем</span><span>PDF A4 · альбомная ориентация · единый источник</span></footer></div></body></html>'''
 
 def build(data):
-    OUT.mkdir(exist_ok=True)
-    (OUT / "downloads").mkdir(exist_ok=True)
-    (OUT / "assets").mkdir(exist_ok=True)
-    shutil.copyfile(ROOT / "assets/style.css", OUT / "assets/style.css")
-    shutil.copyfile(ROOT / "assets/favicon.svg", OUT / "assets/favicon.svg")
-    lessons, areas = pages_for(data)
+    # Only this generated directory is replaced; never delete source directories.
+    target=OUT.resolve()
+    if target != ROOT.resolve()/'site' or target.parent != ROOT.resolve():
+        raise ValueError('Unexpected output directory')
+    if target.exists(): shutil.rmtree(target)
+    (OUT/'assets').mkdir(parents=True)
+    (OUT/'downloads').mkdir()
+    for name in ('style.css','favicon.svg'):
+        shutil.copyfile(ROOT/'assets'/name,OUT/'assets'/name)
     fonts()
-    manifest = {
-        "version": data["version"], "status": data["status"],
-        "lessons": pdf(OUT / "downloads/learning-pages.pdf", data, lessons, "Учебные страницы"),
-        "areas": pdf(OUT / "downloads/subject-areas.pdf", data, areas, "Предметные области"),
+    meta=data['meta']
+    assignment=data['assignment']+data['areas']
+    manifest={
+        'assignment':pdf(OUT/'downloads/assignment.pdf',meta,assignment,'Задание студенту'),
+        'guide':pdf(OUT/'downloads/guide.pdf',meta,data['guide'],'Пошаговая инструкция'),
     }
-    (OUT / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    downloads = '<div class="downloads"><a class="button primary" href="downloads/learning-pages.pdf">Учебные страницы · PDF ↓</a><a class="button" href="downloads/subject-areas.pdf">Предметные области · PDF ↓</a></div>'
-    cards = ''.join(f'<a class="card" href="lessons.html"><span class="eyebrow">Практика {i:02}</span><h3>{ESC(p["title"])}</h3><p>{ESC(p["new"])}</p><span class="result">Результат: {ESC(p["output"])}</span></a>' for i,p in enumerate(data["practices"],1))
-    body = '<section class="lesson"><p class="eyebrow">Новый заполненный образец</p><h2>Одно задание. Три способа познакомиться с ним.</h2><p>Обязательное задание в PDF, подробная инструкция по решению и статичный образец результата. Инструкцию и пример преподаватель выдаёт по своему усмотрению.</p><a class="button primary" href="example.html">Посмотреть пример →</a></section>' + downloads + '<div class="intro"><h2>Одна практика — одно задание с этапами.</h2><p>Связь с другими практиками добавляется при необходимости. Ниже — каркас текущей практики.</p></div><div class="grid">' + cards + '</div>'
-    body += '<section class="lesson"><p class="eyebrow">Два формата / Одна версия содержания</p><h2>Показать на вебинаре. Выдать в учебной системе.</h2><div class="blocks">' + block_html(b("Для преподавателя", "Обзор маршрута, последовательные учебные страницы и отдельная страница предметных областей. Все разделы доступны обычными ссылками; обязательного интерактива нет.")) + block_html(b("Для студента", "Два автономных PDF: общие учебные страницы и индивидуальные условия. Для решения не нужен доступ к репозиторию или сайту. Код и обязательные инструкции включаются в PDF полностью.")) + '</div></section>'
-    body += '<aside class="notice">Текущая публикация — универсальный шаблон. 30 карточек и реквизиты требуют заполнения. Полные задания четырёх практик Unity будут подготовлены на его основе.</aside>' if data['status'] == 'template' else ''
-    (OUT / "index.html").write_text(shell(data, "index.html", data["title"], "Последовательные практики, понятные учебные страницы и индивидуальные варианты для любой специальности.", body), encoding="utf-8")
-    for file, title, lead, items in [("lessons.html", "Учебные страницы", "От постановки задачи к проверяемому результату. Полное содержание доступно также в PDF.", lessons), ("areas.html", "Предметные области", f"{data['variant_count']} индивидуальных карточек. Карточки содержат индивидуальные условия текущей практики.", areas)]:
-        toc = '<nav class="toc" aria-label="Содержание раздела">' + ''.join(f'<a href="#{p.get("anchor", f"page-{i}")}">{ESC(p["title"])}</a>' for i,p in enumerate(items,1)) + '</nav>'
-        (OUT / file).write_text(shell(data, file, title, lead, downloads + toc + ''.join(page_html(p,i) for i,p in enumerate(items,1))), encoding="utf-8")
-    author = [
-        {"title": "Как собрать новую практику", "kicker": "Инструкция автору", "blocks": [
-            b("1. Заполните паспорт", "В content/course.json укажите организацию, специальность, модуль, группу, часы, среду и версию. Неизвестные официальные требования уточните по рабочей программе."),
-            b("2. Опишите задание", "По умолчанию одна практика содержит одно задание с этапами. Связи с другими практиками необязательны: карта выводится только при connections=true. В карточке варианта укажите результат текущей практики."),
-            b("3. Напишите учебные страницы", "В pages добавьте этапы: цель, теория, полный образец, действия, адаптация, проверка, ошибки, сдача. Короткий смысловой шаг оформляйте отдельной страницей. Длинный материал автоматически продолжается."),
-            b("4. Заполните варианты", "В variants опишите все индивидуальные задачи. Число карточек задаётся variant_count. Для каждой практики заполните progression. Условия должны быть различными и сопоставимыми по сложности."),
-        ]},
-        {"title": "Сборка, проверка и выдача", "kicker": "Рабочий процесс", "blocks": [
-            b("Команды", "python -m pip install -r requirements.txt\npython scripts/build.py\npython scripts/check.py\npython -m http.server 8000 --directory site", "code"),
-            b("Перед выдачей студентам", "Замените все поля ЗАПОЛНИТЬ, установите status=ready и выполните python scripts/build.py --release. Сборка отклонит незаполненные поля и повторяющиеся индивидуальные правила. Содержательную корректность проверяет преподаватель."),
-            b("Что загрузить в систему", "site/downloads/learning-pages.pdf и site/downloads/subject-areas.pdf. Проверьте совпадение версий, полноту исходных данных, читаемость всех страниц и список файлов для сдачи."),
-            b("Как провести обзорный вебинар", "Покажите цель и итоговый продукт → карту практик → один полный учебный этап → карточку варианта → критерии и комплект сдачи. Для показа используйте сайт или альбомные PDF."),
-        ]},
-        {"title": "Адаптация под другие специальности", "kicker": "Повторное использование", "blocks": [
-            b("Программирование", "Образец — полный код с инструкцией запуска. Проверки включают нормальные, граничные и ошибочные сценарии."),
-            b("Документы и расчёты", "Образец — заполненный документ или пошаговый расчёт. Укажите исходные данные, единицы измерения, правила заполнения и контрольные значения."),
-            b("Производственные операции", "Образец — последовательность действий и критерии качества. Укажите инструменты и проверенные требования безопасности из профильных документов."),
-            b("Происхождение шаблона", "Структура переработана с учётом DKIP.PP.05-methodI. Визуальная основа — 2026-demo-template: красный акцент, тёмный баннер и светлые карточки. Экзаменационные таймеры и режимы тренажёра не используются."),
-        ]},
-    ]
-    (OUT / "author.html").write_text(shell(data, "author.html", "Преподавателю", "Как наполнить шаблон, проверить автономность комплекта и подготовить выдачу.", ''.join(page_html(p,i) for i,p in enumerate(author,1))), encoding="utf-8")
-    from example import build_example
-    build_example(data)
-    (OUT / ".nojekyll").touch()
-    print(f"Built site: {len(manifest['lessons'])} learning pages, {len(manifest['areas'])} area pages")
+    (OUT/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
+    (OUT/'downloads/CrystalCounter.cs').write_text(data['code'],encoding='utf-8')
+    def pages(items): return ''.join(page_html(p,i) for i,p in enumerate(items,1))
+    def write(file,title,lead,body):
+        (OUT/file).write_text(shell(meta,file,title,lead,body),encoding='utf-8')
+    write('index.html',meta['title'],'Условия, этапы выполнения и сдача задания.',
+          '<div class="downloads"><a class="button primary" href="downloads/assignment.pdf">Задание студенту · PDF</a></div>'+pages(data['assignment']))
+    write('lessons.html','Как выполнить задание','Теория, действия, статичные рисунки и полный образец кода. Выдаётся по решению преподавателя.',
+          '<div class="downloads"><a class="button primary" href="downloads/guide.pdf">Инструкция · PDF</a><a class="button" href="downloads/CrystalCounter.cs">Файл программы · C#</a></div>'+pages(data['guide']))
+    write('areas.html','Предметные области','Индивидуальные условия задания. Номер варианта назначает преподаватель.',pages(data['areas']))
+    teacher='<section class="lesson"><h2>Как выдать материалы</h2><p>Задание в PDF включает общие требования и предметные области. Инструкция с разобранным примером — дополнительный материал. Оба файла доступны в соответствующих разделах меню.</p><h2>Как подготовить другую практику</h2><p>Измените content/course.json: паспорт, задание, этапы инструкции и индивидуальные условия. Сколько вариантов нужно, столько содержательных карточек и добавьте. Пустые копии не создаются.</p><p>Одна практика содержит одно задание. Связь с предыдущей работой при необходимости опишите в условии.</p><h2>Проверка перед занятием</h2><p>Соберите комплект, проверьте PDF и запустите пример в своей версии Unity. Код примера скомпилирован с библиотеками Unity 6000.3.4f1. Интерактивный запуск не проверен: редактор сообщил об отсутствии действующей лицензии.</p></section>'
+    write('author.html','Преподавателю','Порядок выдачи и адаптации одного комплекта.',teacher)
+    # Compatibility addresses contain no educational content or duplicate files.
+    for old,new in [('example.html','index.html'),('example-guide.html','lessons.html'),('example-result.html','lessons.html')]:
+        (OUT/old).write_text(f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={new}"><title>Страница перенесена</title></head><body><a href="{new}">Открыть материал</a></body></html>',encoding='utf-8')
+    (OUT/'.nojekyll').touch()
+    print('Built: 4 sections, 2 PDFs, 1 source of content')
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--release", action="store_true", help="Reject unfinished student materials")
-    args = parser.parse_args()
-    data = json.loads((ROOT / "content/course.json").read_text(encoding="utf-8"))
-    validate(data, args.release)
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--release',action='store_true')
+    args=parser.parse_args()
+    data=load_course()
+    validate(data,args.release)
     build(data)

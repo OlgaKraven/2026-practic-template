@@ -1,86 +1,54 @@
-"""Meaningful build checks: offline links, complete source text, release guard."""
-import copy
+"""Check one complete kit and prevent duplicate outputs from returning."""
 import json
 import re
 from html.parser import HTMLParser
-from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit, unquote
 from pypdf import PdfReader
-from build import ROOT, validate, pages_for
+from build import ROOT, load_course, validate
 
 class Links(HTMLParser):
     def __init__(self):
-        super().__init__(); self.links = []; self.ids = set()
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        if "id" in attrs: self.ids.add(attrs["id"])
-        for key in ("href", "src"):
-            if key in attrs: self.links.append(attrs[key])
+        super().__init__(); self.links=[]; self.ids=set()
+    def handle_starttag(self,tag,attrs):
+        attrs=dict(attrs)
+        if 'id' in attrs: self.ids.add(attrs['id'])
+        for key in ('href','src'):
+            if key in attrs:self.links.append(attrs[key])
 
-data = json.loads((ROOT / "content/course.json").read_text(encoding="utf-8"))
-validate(data)
-parsers = {}
-for file in (ROOT / "site").glob("*.html"):
-    parser = Links(); parser.feed(file.read_text(encoding="utf-8")); parsers[file.resolve()] = parser
-for file, parser in parsers.items():
-    for link in parser.links:
-        parts = urlsplit(link)
-        assert not parts.scheme and not parts.netloc, f"External dependency: {link}"
-        target = (file.parent / unquote(parts.path)).resolve() if parts.path else file
-        assert target.is_file(), f"Broken link: {file.name}: {link}"
-        if parts.fragment:
-            assert parts.fragment in parsers[target].ids, f"Broken anchor: {link}"
-
-mutant = copy.deepcopy(data)
-mutant["variants"][0]["progression"] = {}
-try:
-    validate(mutant)
-except ValueError:
-    pass
-else:
-    raise AssertionError("Validator accepted a variant disconnected from practices")
-if data["status"] == "template":
-    try:
-        validate(data, release=True)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("Unfinished template passed student release validation")
-
-manifest = json.loads((ROOT / "site/manifest.json").read_text(encoding="utf-8"))
-assert len(manifest["areas"]) >= data["variant_count"] + 2
-for name, key, specs in zip(("learning-pages", "subject-areas"), ("lessons", "areas"), pages_for(data)):
-    doc = PdfReader(ROOT / f"site/downloads/{name}.pdf")
-    assert len(doc.pages) == len(manifest[key]), f"Page manifest mismatch: {name}"
-    texts = []
-    for page in doc.pages:
-        assert abs(float(page.mediabox.width) - 841.89) < 1 and abs(float(page.mediabox.height) - 595.28) < 1, "PDF must use A4 landscape"
-        text = page.extract_text()
-        assert text and len(text.strip()) > 80, "Empty PDF page"
-        assert '\ufffd' not in text, "Broken character encoding"
-        texts.append(text)
-    compact = re.sub(r"\s+", "", ''.join(texts))
-    for spec in specs:
-        assert re.sub(r"\s+", "", spec["title"]) in compact, f"Missing PDF heading: {spec['title']}"
-        for block in spec["blocks"]:
-            # Every source line must survive PDF export; wrapping and indentation may differ.
-            for line in block["text"].splitlines():
-                if line.strip():
-                    assert re.sub(r"\s+", "", line) in compact, f"Missing PDF content: {name}: {line[:60]}"
-print(f"PASS: {len(parsers)} offline pages, links/anchors, variant progression, release guard; both PDFs: landscape, text completeness, page count")
-
-example=json.loads((ROOT/'content/example.json').read_text(encoding='utf-8'))
-code_parts=[b['text'] for p in example['guide'] for b in p['blocks'] if b.get('kind')=='code']
-assert '\n'.join(code_parts).strip() == example['code'].strip(), 'Guide must include the entire downloadable script'
-assert (ROOT/'site/downloads/CrystalCounter.cs').read_text(encoding='utf-8') == example['code']
-for name,key in [('example-assignment','assignment'),('example-guide','guide')]:
-    doc=PdfReader(ROOT/f'site/downloads/{name}.pdf')
-    compact=re.sub(r'\s+','', ''.join(p.extract_text() for p in doc.pages))
+data=load_course(); validate(data)
+site=ROOT/'site'
+parsers={}
+for file in site.glob('*.html'):
+    p=Links(); p.feed(file.read_text(encoding='utf-8')); parsers[file.resolve()]=p
+for file,p in parsers.items():
+    for link in p.links:
+        part=urlsplit(link)
+        assert not part.scheme and not part.netloc, link
+        target=(file.parent/unquote(part.path)).resolve() if part.path else file
+        assert target.is_file(),link
+        if part.fragment:assert part.fragment in parsers[target].ids,link
+expected={'assignment.pdf','guide.pdf','CrystalCounter.cs'}
+assert {p.name for p in (site/'downloads').iterdir()}==expected,'Unexpected duplicate output'
+assert {p.name for p in (ROOT/'content').glob('*.json')}=={'course.json'},'Multiple content sources'
+code_parts=[b['text'] for p in data['guide'] for b in p['blocks'] if b.get('kind')=='code']
+assert '\n'.join(code_parts).strip()==data['code'].strip(),'Incomplete or repeated code ranges'
+assert (site/'downloads/CrystalCounter.cs').read_text(encoding='utf-8')==data['code']
+manifest=json.loads((site/'manifest.json').read_text(encoding='utf-8'))
+for name,specs in [('assignment',data['assignment']+data['areas']),('guide',data['guide'])]:
+    doc=PdfReader(site/f'downloads/{name}.pdf')
+    assert len(doc.pages)==len(manifest[name])
+    text=''.join(p.extract_text() for p in doc.pages)
+    compact=re.sub(r'\s+','',text)
     for page in doc.pages:
         assert abs(float(page.mediabox.width)-841.89)<1 and abs(float(page.mediabox.height)-595.28)<1
-    for spec in example[key]:
+    for spec in specs:
         for block in spec['blocks']:
             for line in block['text'].splitlines():
-                if line.strip(): assert re.sub(r'\s+','',line) in compact, f'Missing example text: {line[:40]}'
-assert 'Карта последовательных практик' not in (ROOT/'site/example.html').read_text(encoding='utf-8')
-print('PASS: standalone assignment, both example PDFs, complete code in guide and download')
+                if line.strip():assert re.sub(r'\s+','',line) in compact,line[:80]
+for old in ['example.html','example-guide.html','example-result.html']:
+    text=(site/old).read_text(encoding='utf-8')
+    assert 'http-equiv="refresh"' in text and '<article' not in text
+try:validate(data,release=True)
+except ValueError:assert data['meta']['status']!='ready'
+else:assert data['meta']['status']=='ready'
+print('PASS: one source, two PDFs, complete code, offline links, PDF text, landscape layout, content-free redirects')

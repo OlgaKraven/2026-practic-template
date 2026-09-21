@@ -10,7 +10,7 @@
     "module": "Основы логики и интерфейса",
     "hours": "по плану преподавателя"
   },
-  "code": "using UnityEngine;\n\npublic class CrystalCounter : MonoBehaviour\n{\n    [Min(1)] public int target = 3;\n    private int count = 0;\n\n    void OnGUI()\n    {\n        var text = new GUIStyle(GUI.skin.label);\n        text.fontSize = 22;\n        var button = new GUIStyle(GUI.skin.button);\n        button.fontSize = 20;\n\n        GUILayout.BeginArea(new Rect(24, 24, 320, 280));\n        GUILayout.Label(\"Собрано: \" + count +\n            \" из \" + target, text);\n\n        GUI.enabled = count < target;\n        if (GUILayout.Button(\"Добавить предмет\",\n            button, GUILayout.Height(52)))\n        {\n            count++;\n        }\n        GUI.enabled = true;\n\n        if (count >= target)\n            GUILayout.Label(\"Цель достигнута\", text);\n\n        if (GUILayout.Button(\"Начать заново\",\n            button, GUILayout.Height(52)))\n        {\n            count = 0;\n        }\n        GUILayout.EndArea();\n    }\n}\n",
+  "code": "using UnityEngine;\n\npublic class CrystalCounter : MonoBehaviour\n{\n    [Min(1)] public int target = 3;\n    private int count = 0;\n\n    void OnGUI()\n    {\n        var text = new GUIStyle(GUI.skin.label);\n        text.fontSize = 22;\n        var button = new GUIStyle(GUI.skin.button);\n        button.fontSize = 20;\n\n        GUILayout.BeginArea(\n            new Rect(24, 24, 320, 280));\n        GUILayout.Label(\"Собрано: \" + count +\n            \" из \" + target, text);\n\n        GUI.enabled = count < target;\n        if (GUILayout.Button(\"Добавить предмет\",\n            button, GUILayout.Height(52)))\n        {\n            count++;\n        }\n        GUI.enabled = true;\n\n        if (count >= target)\n            GUILayout.Label(\"Цель достигнута\", text);\n\n        if (GUILayout.Button(\"Начать заново\",\n            button, GUILayout.Height(52)))\n        {\n            count = 0;\n        }\n        GUILayout.EndArea();\n    }\n}\n",
   "assignment": [
     {
       "title": "Что нужно сделать",
@@ -151,8 +151,8 @@
       "kicker": "Шаг 3 / CrystalCounter.cs · часть 1 из 2",
       "blocks": [
         {
-          "title": "Строки 1–18",
-          "text": "using UnityEngine;\n\npublic class CrystalCounter : MonoBehaviour\n{\n    [Min(1)] public int target = 3;\n    private int count = 0;\n\n    void OnGUI()\n    {\n        var text = new GUIStyle(GUI.skin.label);\n        text.fontSize = 22;\n        var button = new GUIStyle(GUI.skin.button);\n        button.fontSize = 20;\n\n        GUILayout.BeginArea(new Rect(24, 24, 320, 280));\n        GUILayout.Label(\"Собрано: \" + count +\n            \" из \" + target, text);\n",
+          "title": "Строки 1–19",
+          "text": "using UnityEngine;\n\npublic class CrystalCounter : MonoBehaviour\n{\n    [Min(1)] public int target = 3;\n    private int count = 0;\n\n    void OnGUI()\n    {\n        var text = new GUIStyle(GUI.skin.label);\n        text.fontSize = 22;\n        var button = new GUIStyle(GUI.skin.button);\n        button.fontSize = 20;\n\n        GUILayout.BeginArea(\n            new Rect(24, 24, 320, 280));\n        GUILayout.Label(\"Собрано: \" + count +\n            \" из \" + target, text);\n",
           "kind": "code"
         },
         {

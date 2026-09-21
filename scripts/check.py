@@ -5,7 +5,8 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
-from build import ROOT, validate
+from pypdf import PdfReader
+from build import ROOT, validate, pages_for
 
 class Links(HTMLParser):
     def __init__(self):
@@ -46,8 +47,24 @@ if data["status"] == "template":
     else:
         raise AssertionError("Unfinished template passed student release validation")
 
-for file in (ROOT / "site/downloads").glob("*.pdf"):
-    assert file.stat().st_size > 10000, f"Empty PDF: {file.name}"
 manifest = json.loads((ROOT / "site/manifest.json").read_text(encoding="utf-8"))
 assert len(manifest["areas"]) >= data["variant_count"] + 2
-print(f"PASS: {len(parsers)} offline pages, all links/anchors, variant progression, release guard, PDF outputs")
+for name, key, specs in zip(("learning-pages", "subject-areas"), ("lessons", "areas"), pages_for(data)):
+    doc = PdfReader(ROOT / f"site/downloads/{name}.pdf")
+    assert len(doc.pages) == len(manifest[key]), f"Page manifest mismatch: {name}"
+    texts = []
+    for page in doc.pages:
+        assert abs(float(page.mediabox.width) - 841.89) < 1 and abs(float(page.mediabox.height) - 595.28) < 1, "PDF must use A4 landscape"
+        text = page.extract_text()
+        assert text and len(text.strip()) > 80, "Empty PDF page"
+        assert '\ufffd' not in text, "Broken character encoding"
+        texts.append(text)
+    compact = re.sub(r"\s+", "", ''.join(texts))
+    for spec in specs:
+        assert re.sub(r"\s+", "", spec["title"]) in compact, f"Missing PDF heading: {spec['title']}"
+        for block in spec["blocks"]:
+            # Every source line must survive PDF export; wrapping and indentation may differ.
+            for line in block["text"].splitlines():
+                if line.strip():
+                    assert re.sub(r"\s+", "", line) in compact, f"Missing PDF content: {name}: {line[:60]}"
+print(f"PASS: {len(parsers)} offline pages, links/anchors, variant progression, release guard; both PDFs: landscape, text completeness, page count")

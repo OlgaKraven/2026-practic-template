@@ -68,3 +68,19 @@ for name, key, specs in zip(("learning-pages", "subject-areas"), ("lessons", "ar
                 if line.strip():
                     assert re.sub(r"\s+", "", line) in compact, f"Missing PDF content: {name}: {line[:60]}"
 print(f"PASS: {len(parsers)} offline pages, links/anchors, variant progression, release guard; both PDFs: landscape, text completeness, page count")
+
+example=json.loads((ROOT/'content/example.json').read_text(encoding='utf-8'))
+code_parts=[b['text'] for p in example['guide'] for b in p['blocks'] if b.get('kind')=='code']
+assert '\n'.join(code_parts).strip() == example['code'].strip(), 'Guide must include the entire downloadable script'
+assert (ROOT/'site/downloads/CrystalCounter.cs').read_text(encoding='utf-8') == example['code']
+for name,key in [('example-assignment','assignment'),('example-guide','guide')]:
+    doc=PdfReader(ROOT/f'site/downloads/{name}.pdf')
+    compact=re.sub(r'\s+','', ''.join(p.extract_text() for p in doc.pages))
+    for page in doc.pages:
+        assert abs(float(page.mediabox.width)-841.89)<1 and abs(float(page.mediabox.height)-595.28)<1
+    for spec in example[key]:
+        for block in spec['blocks']:
+            for line in block['text'].splitlines():
+                if line.strip(): assert re.sub(r'\s+','',line) in compact, f'Missing example text: {line[:40]}'
+assert 'Карта последовательных практик' not in (ROOT/'site/example.html').read_text(encoding='utf-8')
+print('PASS: standalone assignment, both example PDFs, complete code in guide and download')

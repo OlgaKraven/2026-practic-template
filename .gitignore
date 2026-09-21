@@ -1,0 +1,5 @@
+__pycache__/
+.venv/
+site/
+work/
+.playwright-cli/

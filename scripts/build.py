@@ -105,6 +105,12 @@ def pdf(path, data, pages, name):
     body = ParagraphStyle("body", fontName="Body", fontSize=13.5, leading=19, textColor=colors.HexColor("#30343b"), splitLongWords=True)
     head = ParagraphStyle("head", fontName="Bold", fontSize=14, leading=18, textColor=colors.HexColor("#1c1c1c"))
     code = ParagraphStyle("code", fontName="Mono", fontSize=11, leading=14.5, textColor=colors.HexColor("#22252a"))
+    for spec in pages:
+        for block in spec["blocks"]:
+            if block.get("kind") == "code":
+                for line in block["text"].splitlines():
+                    if pdfmetrics.stringWidth(line, "Mono", 11) > colw:
+                        raise ValueError(f"Строка кода слишком длинная; разбейте выражение вручную: {spec['title']}: {line}")
     title_style = ParagraphStyle("title", fontName="Bold", fontSize=23, leading=28)
     page_no = 0
     records = []

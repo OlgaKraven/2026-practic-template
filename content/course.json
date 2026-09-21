@@ -175,7 +175,7 @@
       "blocks": [
         {
           "title": "CapacityCounter.cs",
-          "text": "public sealed class CapacityCounter\n{\n    public int Count { get; private set; }\n    public int Capacity { get; }\n\n    public CapacityCounter(int capacity)\n    {\n        if (capacity < 1)\n            throw new System.ArgumentOutOfRangeException(\n                nameof(capacity));\n        Capacity = capacity;\n    }\n\n    public bool TryAdd()\n    {\n        if (Count >= Capacity) return false;\n        Count++;\n        return true;\n    }\n}",
+          "text": "using System;\n\npublic sealed class CapacityCounter\n{\n    public int Count { get; private set; }\n    public int Capacity { get; }\n\n    public CapacityCounter(int capacity)\n    {\n        if (capacity < 1)\n            throw new ArgumentOutOfRangeException(\n                nameof(capacity));\n        Capacity = capacity;\n    }\n\n    public bool TryAdd()\n    {\n        if (Count >= Capacity) return false;\n        Count++;\n        return true;\n    }\n}",
           "kind": "code"
         },
         {

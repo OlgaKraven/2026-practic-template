@@ -196,7 +196,7 @@ def page_html(page, i):
     return f'<article class="lesson" id="{anchor}"><p class="eyebrow">{ESC(page["kicker"])}</p><h2>{ESC(page["title"])}</h2><div class="blocks">' + "".join(block_html(b) for b in page["blocks"]) + '</div></article>'
 
 def shell(data, active, title, lead, body):
-    links = [("index.html", "Задание"), ("lessons.html", "Инструкция и образец"), ("areas.html", "Предметные области"), ("author.html", "Преподавателю")]
+    links = [("index.html", "Задание"), ("lessons.html", "Инструкция и образец"), ("areas.html", "Предметные области")]
     nav = "".join(f'<a {"aria-current=page" if url == active else ""} href="{url}">{label}</a>' for url, label in links)
     mark = '<span class="badge">Шаблон для заполнения</span>' if data["status"] == "template" else '<span class="badge">Заполненный пример</span>' if data['status']=='example' else '<span class="badge">Учебный комплект</span>'
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Универсальный шаблон практик: страницы для вебинара и автономные учебные PDF."><title>{ESC(title)} · {ESC(data['title'])}</title><link rel="icon" href="assets/favicon.svg"><link rel="stylesheet" href="assets/style.css"></head><body><a class="skip" href="#main">Перейти к содержанию</a><header class="shell top"><a class="brand" href="index.html"><span class="emblem">ПР</span><span><strong>Практика / Методические материалы</strong><small>{ESC(data['subtitle'])}</small></span></a><span class="version">Версия {ESC(data['version'])}</span></header><div class="shell"><nav aria-label="Основная навигация">{nav}</nav><main id="main"><section class="hero"><p class="eyebrow">Учебный маршрут / 2026</p><h1>{ESC(title)}</h1><p>{ESC(lead)}</p>{mark}</section>{body}</main><footer><span>Материалы для обзора преподавателем</span><span>PDF A4 · альбомная ориентация · единый источник</span></footer></div></body></html>'''
@@ -228,13 +228,11 @@ def build(data):
     write('lessons.html','Как выполнить задание','Теория, действия, статичные рисунки и полный образец кода. Выдаётся по решению преподавателя.',
           '<div class="downloads"><a class="button primary" href="downloads/guide.pdf">Инструкция · PDF</a><a class="button" href="downloads/CrystalCounter.cs">Файл программы · C#</a></div>'+pages(data['guide']))
     write('areas.html','Предметные области','Индивидуальные условия задания. Номер варианта назначает преподаватель.',pages(data['areas']))
-    teacher='<section class="lesson"><h2>Как выдать материалы</h2><p>Задание в PDF включает общие требования и предметные области. Инструкция с разобранным примером — дополнительный материал. Оба файла доступны в соответствующих разделах меню.</p><h2>Как подготовить другую практику</h2><p>Измените content/course.json: паспорт, задание, этапы инструкции и индивидуальные условия. Сколько вариантов нужно, столько содержательных карточек и добавьте. Пустые копии не создаются.</p><p>Одна практика содержит одно задание. Связь с предыдущей работой при необходимости опишите в условии.</p><h2>Проверка перед занятием</h2><p>Соберите комплект, проверьте PDF и запустите пример в своей версии Unity. Код примера скомпилирован с библиотеками Unity 6000.3.4f1. Интерактивный запуск не проверен: редактор сообщил об отсутствии действующей лицензии.</p></section>'
-    write('author.html','Преподавателю','Порядок выдачи и адаптации одного комплекта.',teacher)
     # Compatibility addresses contain no educational content or duplicate files.
     for old,new in [('example.html','index.html'),('example-guide.html','lessons.html'),('example-result.html','lessons.html')]:
         (OUT/old).write_text(f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={new}"><title>Страница перенесена</title></head><body><a href="{new}">Открыть материал</a></body></html>',encoding='utf-8')
     (OUT/'.nojekyll').touch()
-    print('Built: 4 sections, 2 PDFs, 1 source of content')
+    print('Built: 3 sections, 2 PDFs, 1 source of content')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
